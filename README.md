@@ -221,3 +221,125 @@ PersistentKeepalive = 25         # 防止 NAT 超时
 ### **客户端关键点**
 1. 配置 `/etc/wireguard/wg0.conf`，确保填写正确的服务端公钥和 IP。
 2. 添加 `DNS` 参数解决外网问题。
+
+---
+
+## ** *要让你的手机连接到 WireGuard 服务端，你需要为手机（客户端2）生成新的配置，并将其添加到服务端的配置中。以下是完整的步骤：**
+
+## **1. 在服务端配置客户端2**
+首先，生成客户端2（手机）的密钥对，并将公钥添加到服务端。
+
+### **1.1 在服务端生成客户端2的密钥对**
+运行以下命令生成私钥和公钥：
+```bash
+umask 077
+wg genkey | tee client2_private.key | wg pubkey > client2_public.key
+```
+
+记下生成的密钥：
+- **私钥**：`client2_private.key`
+- **公钥**：`client2_public.key`
+
+---
+
+### **1.2 编辑服务端配置文件**
+在服务端的 `/etc/wireguard/wg0.conf` 文件中添加客户端2的配置：
+
+#### 服务端 `/etc/wireguard/wg0.conf` 文件更新：
+```ini
+[Peer]
+# 客户端2（手机）配置
+PublicKey = <客户端2的公钥>     # 替换为 client2_public.key 的内容
+AllowedIPs = 10.0.0.3/32        # 为客户端2分配虚拟 IP
+```
+
+保存并重新加载服务端配置：
+```bash
+sudo wg set wg0 peer <客户端2的公钥> allowed-ips 10.0.0.3/32
+sudo wg-quick save wg0
+sudo wg-quick down wg0 && sudo wg-quick up wg0
+```
+
+---
+
+## **2. 在手机上配置 WireGuard**
+### **2.1 下载 WireGuard 应用**
+在手机上安装 WireGuard 客户端：
+- **Android**：通过 Google Play 下载 [WireGuard](https://play.google.com/store/apps/details?id=com.wireguard.android)。
+- **iOS**：通过 App Store 下载 [WireGuard](https://apps.apple.com/us/app/wireguard/id1441195209)。
+
+---
+
+### **2.2 创建客户端配置**
+在服务端上创建客户端2（手机）的配置文件，例如 `client2.conf`：
+```bash
+nano client2.conf
+```
+
+填入以下内容：
+
+#### `client2.conf` 文件内容：
+```ini
+[Interface]
+PrivateKey = <客户端2的私钥>         # 替换为 client2_private.key 的内容
+Address = 10.0.0.3/24              # 客户端2的虚拟 IP
+DNS = 8.8.8.8                      # 使用 Google DNS，可根据需要修改
+
+[Peer]
+PublicKey = <服务端的公钥>           # 替换为服务端公钥
+Endpoint = <服务端公网IP>:51820     # 替换为服务端的公网 IP 和端口
+AllowedIPs = 0.0.0.0/0, ::/0        # 路由所有流量通过 VPN
+PersistentKeepalive = 25            # 防止 NAT 超时
+```
+
+替换以下内容：
+- `<客户端2的私钥>`：为 `client2_private.key` 的内容。
+- `<服务端的公钥>`：为服务端的公钥，可以通过以下命令查看：
+  ```bash
+  cat /etc/wireguard/server_public.key
+  ```
+- `<服务端公网IP>`：服务端的公网 IP 地址。
+
+---
+
+### **2.3 将配置传输到手机**
+1. **使用二维码导入**：
+   - 在服务端安装二维码生成工具：
+     ```bash
+     sudo apt install qrencode -y
+     ```
+   - 生成二维码：
+     ```bash
+     qrencode -t ansiutf8 < client2.conf
+     ```
+   - 打开手机上的 WireGuard 应用，选择 **Scan from QR Code**，扫描生成的二维码。
+
+2. **通过文件导入**：
+   - 将 `client2.conf` 文件通过安全方式（如邮件或云存储）传输到手机。
+   - 在 WireGuard 应用中选择 **Import from file**，导入配置。
+
+---
+
+## **3. 测试连接**
+1. 在手机上启动 WireGuard 隧道。
+2. 测试能否访问服务端：
+   - 在手机中 `ping 10.0.0.1`。
+3. 测试外网连接：
+   - 访问 [https://whatismyipaddress.com/](https://whatismyipaddress.com/) 检查 IP 地址是否变为服务端的公网 IP。
+
+---
+
+## **4. 防火墙检查**
+确保服务端防火墙允许 WireGuard 的 UDP 流量：
+```bash
+sudo ufw allow 51820/udp
+```
+
+---
+
+## **总结**
+- **服务端配置**：添加客户端2（手机）的公钥和虚拟 IP。
+- **客户端配置**：为手机生成单独的私钥、公钥和配置文件。
+- **导入方式**：通过二维码或配置文件导入到手机。
+- **测试连接**：检查是否能访问服务端和外网。
+
